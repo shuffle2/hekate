@@ -14,6 +14,7 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <string.h>
 #include "../soc/uart.h"
 #include "../soc/t210.h"
 #include "../utils/util.h"
@@ -75,4 +76,10 @@ void uart_recv(u32 idx, u8 *buf, u32 len)
 			;
 		buf[i] = uart->UART_THR_DLAB;
 	};
+}
+
+void uart_send_str(u32 idx, const char *str)
+{
+	uart_send(idx, (u8 *)str, strlen(str));
+	uart_wait_idle(idx, UART_TX_IDLE);
 }

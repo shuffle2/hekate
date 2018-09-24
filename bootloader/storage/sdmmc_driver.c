@@ -118,7 +118,7 @@ static int _sdmmc_config_ven_ceata_clk(sdmmc_t *sdmmc, u32 id)
 
 	if (id == 4)
 		sdmmc->regs->venceatactl = (sdmmc->regs->venceatactl & 0xFFFFC0FF) | 0x2800;
-	sdmmc->regs->field_1C0 &= 0xFFFDFFFF;
+	sdmmc->regs->vendor_tuning_cntrl0 &= 0xFFFDFFFF;
 	if (id == 4)
 	{
 		if (!sdmmc->venclkctl_set)
@@ -158,11 +158,11 @@ static int _sdmmc_wait_type4(sdmmc_t *sdmmc)
 		sdmmc->regs->clkcon |= TEGRA_MMC_CLKCON_SD_CLOCK_ENABLE;
 	}
 
-	sdmmc->regs->field_1B0 |= 0x80000000;
+	sdmmc->regs->vendor_dll_cal_cfg |= 0x80000000;
 	_sdmmc_get_clkcon(sdmmc);
 
 	u32 timeout = get_tmr_ms() + 5;
-	while (sdmmc->regs->field_1B0 & 0x80000000)
+	while (sdmmc->regs->vendor_dll_cal_cfg & 0x80000000)
 	{
 		if (get_tmr_ms() > timeout)
 		{
@@ -172,7 +172,7 @@ static int _sdmmc_wait_type4(sdmmc_t *sdmmc)
 	}
 
 	timeout = get_tmr_ms() + 10;
-	while (sdmmc->regs->field_1BC & 0x80000000)
+	while (sdmmc->regs->vendor_dll_cal_cfg_status & 0x80000000)
 	{
 		if (get_tmr_ms() > timeout)
 		{
@@ -532,7 +532,7 @@ int sdmmc_config_tuning(sdmmc_t *sdmmc, u32 type, u32 cmd)
 {
 	u32 max = 0, flag = 0;
 
-	sdmmc->regs->field_1C4 = 0;
+	sdmmc->regs->vendor_tuning_cntrl1 = 0;
 	switch (type)
 	{
 	case 3:
@@ -551,10 +551,10 @@ int sdmmc_config_tuning(sdmmc_t *sdmmc, u32 type, u32 cmd)
 		return 0;
 	}
 
-	sdmmc->regs->field_1C0 = (sdmmc->regs->field_1C0 & 0xFFFF1FFF) | flag;
-	sdmmc->regs->field_1C0 = (sdmmc->regs->field_1C0 & 0xFFFFE03F) | 0x40;
-	sdmmc->regs->field_1C0 |= 0x20000;
-	sdmmc->regs->hostctl2  |= SDHCI_CTRL_EXEC_TUNING;
+	sdmmc->regs->vendor_tuning_cntrl0 = (sdmmc->regs->vendor_tuning_cntrl0 & 0xFFFF1FFF) | flag;
+	sdmmc->regs->vendor_tuning_cntrl0 = (sdmmc->regs->vendor_tuning_cntrl0 & 0xFFFFE03F) | 0x40;
+	sdmmc->regs->vendor_tuning_cntrl0 |= 0x20000;
+	sdmmc->regs->hostctl2 |= SDHCI_CTRL_EXEC_TUNING;
 
 	for (u32 i = 0; i < max; i++)
 	{
@@ -969,6 +969,14 @@ int sdmmc_init(sdmmc_t *sdmmc, u32 id, u32 power, u32 bus_width, u32 type, int n
 	if (id == SDMMC_1)
 		if (!_sdmmc_config_sdmmc1())
 			return 0;
+	
+	if (id == SDMMC_2) {
+		// setup gpio BB3 to enable gcasic power
+		PINMUX_AUX(PINMUX_AUX_GPIO_X1_AUD) = PINMUX_INPUT_ENABLE | PINMUX_PULL_DOWN | 1; //GPIO control, pull down.
+		gpio_config(GPIO_PORT_BB, GPIO_PIN_3, GPIO_MODE_GPIO);
+		gpio_write(GPIO_PORT_BB, GPIO_PIN_3, GPIO_HIGH);
+		gpio_output_enable(GPIO_PORT_BB, GPIO_PIN_3, GPIO_OUTPUT_ENABLE);
+	}
 
 	memset(sdmmc, 0, sizeof(sdmmc_t));
 
@@ -990,8 +998,10 @@ int sdmmc_init(sdmmc_t *sdmmc, u32 id, u32 power, u32 bus_width, u32 type, int n
 	sdmmc->clock_stopped = 0;
 
 	//TODO: make this skip-able.
-	sdmmc->regs->field_1F0 |= 0x80000;
-	sdmmc->regs->field_1AC &= 0xFFFFFFFB;
+	// IO_SPARE[19] = 1
+	sdmmc->regs->io_spare |= 1 << 19;
+	// SEL_VREG = 0
+	sdmmc->regs->vendor_io_trim_ctrl &= ~4;
 	static const u32 trim_values[] = { 2, 8, 3, 8 };
 	sdmmc->regs->venclkctl = (sdmmc->regs->venclkctl & 0xE0FFFFFF) | (trim_values[sdmmc->id] << 24);
 	sdmmc->regs->sdmemcmppadctl = (sdmmc->regs->sdmemcmppadctl & 0xF) | 7;

@@ -411,8 +411,8 @@ void config_hw()
 	APB_MISC(APB_MISC_PP_PINMUX_GLOBAL) = 0;
 	config_gpios();
 
-	//clock_enable_uart(UART_C);
-	//uart_init(UART_C, 115200);
+	clock_enable_uart(UART_A);
+	uart_init(UART_A, 115200);
 
 	clock_enable_cl_dvfs();
 
@@ -3246,8 +3246,8 @@ void ipl_main()
 	set_default_configuration();
 
 	// Save sdram lp0 config.
-	if (ianos_loader(true, "bootloader/sys/libsys_lp0.bso", DRAM_LIB, (void *)sdram_get_params()))
-		h_cfg.errors |= ERR_LIBSYS_LP0;
+//	if (ianos_loader(true, "bootloader/sys/libsys_lp0.bso", DRAM_LIB, (void *)sdram_get_params()))
+//		h_cfg.errors |= ERR_LIBSYS_LP0;
 
 	display_init();
 
@@ -3264,13 +3264,16 @@ void ipl_main()
 	display_backlight_pwm_init();
 	//display_backlight_brightness(h_cfg.backlight, 1000);
 
-	check_power_off_from_hos();
+//	check_power_off_from_hos();
+//
+//	// Load saved configuration and auto boot if enabled.
+//	auto_launch_firmware();
+//
+//	while (true)
+//		tui_do_menu(&gfx_con, &menu_top);
 
-	// Load saved configuration and auto boot if enabled.
-	auto_launch_firmware();
-
-	while (true)
-		tui_do_menu(&gfx_con, &menu_top);
+	gc_test();
+	reboot_rcm();
 
 	while (true)
 		;

@@ -21,6 +21,7 @@
 #include "sd.h"
 #include "../utils/util.h"
 #include "../mem/heap.h"
+#include "../soc/uart.h"
 
 /*#include "gfx.h"
 extern gfx_ctxt_t gfx_ctxt;
@@ -1128,34 +1129,22 @@ int sdmmc_storage_init_sd(sdmmc_storage_t *storage, sdmmc_t *sdmmc, u32 id, u32 
 }
 
 /*
-* Gamecard specific functions.
+* GC ASIC specific functions.
 */
 
-int _gc_storage_custom_cmd(sdmmc_storage_t *storage, void *buf)
+union gc_cmd {
+	u8 op;
+	u8 data[0x40];
+} __attribute__((packed));
+typedef union gc_cmd gc_cmd_t;
+
+static sdmmc_storage_t gc_storage;
+static sdmmc_t gc_sdmmc;
+
+static void gc_cmd_init(gc_cmd_t *cmd, u8 op)
 {
-	u32 resp;
-	sdmmc_cmd_t cmdbuf;
-	sdmmc_init_cmd(&cmdbuf, 60, 0, SDMMC_RSP_TYPE_1, 1);
-
-	sdmmc_req_t reqbuf;
-	reqbuf.buf = buf;
-	reqbuf.blksize = 64;
-	reqbuf.num_sectors = 1;
-	reqbuf.is_write = 1;
-	reqbuf.is_multi_block = 0;
-	reqbuf.is_auto_cmd12 = 0;
-
-	if (!sdmmc_execute_cmd(storage->sdmmc, &cmdbuf, &reqbuf, 0))
-	{
-		sdmmc_stop_transmission(storage->sdmmc, &resp);
-		return 0;
-	}
-
-	if (!sdmmc_get_rsp(storage->sdmmc, &resp, 4, SDMMC_RSP_TYPE_1))
-		return 0;
-	if (!_sdmmc_storage_check_result(resp))
-		return 0;
-	return _sdmmc_storage_check_status(storage);
+	memset(cmd->data, 0, sizeof(cmd->data));
+	cmd->op = op;
 }
 
 int sdmmc_storage_init_gc(sdmmc_storage_t *storage, sdmmc_t *sdmmc)
@@ -1163,17 +1152,97 @@ int sdmmc_storage_init_gc(sdmmc_storage_t *storage, sdmmc_t *sdmmc)
 	memset(storage, 0, sizeof(sdmmc_storage_t));
 	storage->sdmmc = sdmmc;
 
-	if (!sdmmc_init(sdmmc, SDMMC_2, SDMMC_POWER_1_8, SDMMC_BUS_WIDTH_8, 14, 0))
+	if (!sdmmc_init(sdmmc, SDMMC_2, SDMMC_POWER_1_8, SDMMC_BUS_WIDTH_8, 14, 0)) {
+		uart_send_str(UART_A, "1");
 		return 0;
+	}
 	DPRINTF("[gc] after init\n");
 
 	usleep(1000 + (10000 + sdmmc->divisor - 1) / sdmmc->divisor);
 
-	if (!sdmmc_config_tuning(storage->sdmmc, 14, MMC_SEND_TUNING_BLOCK_HS200))
+	if (!sdmmc_config_tuning(storage->sdmmc, 14, MMC_SEND_TUNING_BLOCK_HS200)) {
+		uart_send_str(UART_A, "2");
 		return 0;
+	}
 	DPRINTF("[gc] after tuning\n");
 
 	sdmmc_sd_clock_ctrl(sdmmc, 1);
 
 	return 1;
+}
+
+static int gc_vendor_cmd60(sdmmc_storage_t *storage, void *buf, u32 len) {
+	u32 resp;
+	sdmmc_cmd_t cmdbuf;
+	sdmmc_init_cmd(&cmdbuf, 60, 0, SDMMC_RSP_TYPE_1, 1);
+
+	sdmmc_req_t reqbuf = {};
+	reqbuf.buf = buf;
+	reqbuf.blksize = len;
+	reqbuf.num_sectors = 1;
+	reqbuf.is_write = 1;
+
+	if (!sdmmc_execute_cmd(storage->sdmmc, &cmdbuf, &reqbuf, 0)) {
+		sdmmc_stop_transmission(storage->sdmmc, &resp);
+		return 0;
+	}
+
+	if (!sdmmc_get_rsp(storage->sdmmc, &resp, sizeof(resp), SDMMC_RSP_TYPE_1))
+		return 0;
+	if (!_sdmmc_storage_check_result(resp))
+		return 0;
+	return _sdmmc_storage_check_status(storage);
+}
+
+static int gc_vendor_cmd(sdmmc_storage_t *storage, u32 opcode) {
+	u32 resp;
+	sdmmc_cmd_t cmdbuf;
+	sdmmc_init_cmd(&cmdbuf, opcode, 0, SDMMC_RSP_TYPE_1, 1);
+
+	if (!sdmmc_execute_cmd(storage->sdmmc, &cmdbuf, NULL, 0)) {
+		return 0;
+	}
+
+	if (!sdmmc_get_rsp(storage->sdmmc, &resp, sizeof(resp), SDMMC_RSP_TYPE_1))
+		return 0;
+	if (!_sdmmc_storage_check_result(resp))
+		return 0;
+	return _sdmmc_storage_check_status(storage);
+}
+
+static int gc_vendor_write(sdmmc_storage_t *storage, u8 *buf, u32 len) {
+	u32 blkcnt = 0;
+	return _sdmmc_storage_readwrite_ex(storage, &blkcnt, 0, len / 512, buf, 1);
+}
+
+// XXX horizon also supports reading sectors here, but no code uses it
+static int gc_vendor_xfer(sdmmc_storage_t *storage, gc_cmd_t *cmd, u8 *buf, u32 len) {
+	int rv;
+	u32 resp;
+	rv = gc_vendor_cmd60(storage, cmd->data, sizeof(cmd->data));
+	uart_send_str(UART_A, rv?"A":"B");
+	if (rv) {
+		rv = gc_vendor_write(storage, buf, len);
+	} else {
+		rv = sdmmc_stop_transmission(storage->sdmmc, &resp);
+	}
+	uart_send_str(UART_A, rv?"C":"D");
+	rv = gc_vendor_cmd(storage, 61);
+	return rv;
+}
+
+static int gc_upload_fw(sdmmc_storage_t *storage) {
+	gc_cmd_t cmd;
+	gc_cmd_init(&cmd, 1);
+	extern u8 gc_reader_fw[0x7800];
+	return gc_vendor_xfer(storage, &cmd, gc_reader_fw, sizeof(gc_reader_fw));
+}
+
+void gc_test() {
+	if (!sdmmc_storage_init_gc(&gc_storage, &gc_sdmmc)) {
+		return;
+	}
+	if (!gc_upload_fw(&gc_storage)) {
+		return;
+	}
 }

@@ -8,6 +8,7 @@ SECTIONS {
 	}
 	.data : {
 		*(.data*);
+		*(.gc_fw*);
 		*(.rodata*);
 	}
 	. = ALIGN(0x10);

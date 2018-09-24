@@ -115,18 +115,24 @@ typedef struct _t210_sdmmc_t
 	vu32 vendebouncecnt;
 	vu32 venmiscctl;
 	vu32 res6[34];
-	vu32 field_1AC;
-	vu32 field_1B0;
-	vu8 res7[8];
-	vu32 field_1BC;
-	vu32 field_1C0;
-	vu32 field_1C4;
-	vu8 field_1C8[24];
+	vu32 vendor_io_trim_ctrl;
+	vu32 vendor_dll_cal_cfg;
+	vu32 vendor_dll_ctrl0;
+	vu32 vendor_dll_ctrl1;
+	vu32 vendor_dll_cal_cfg_status;
+	vu32 vendor_tuning_cntrl0;
+	vu32 vendor_tuning_cntrl1;
+	vu32 vendor_tuning_status0;
+	vu32 vendor_tuning_status1;
+	vu32 vendor_clk_gate_hysteresis_count;
+	vu32 vendor_preset_val0;
+	vu32 vendor_preset_val1;
+	vu32 vendor_preset_val2;
 	vu32 sdmemcmppadctl;
 	vu32 autocalcfg;
 	vu32 autocalintval;
 	vu32 autocalsts;
-	vu32 field_1F0;
+	vu32 io_spare;
 } t210_sdmmc_t;
 
 #endif

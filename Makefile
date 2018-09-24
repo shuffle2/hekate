@@ -9,6 +9,7 @@ SOURCEDIR = bootloader
 VPATH = $(dir $(wildcard ./$(SOURCEDIR)/*/)) $(dir $(wildcard ./$(SOURCEDIR)/*/*/))
 
 OBJS = $(addprefix $(BUILD)/$(TARGET)/, \
+	gc_fw.o \
 	start.o \
 	main.o \
 	config.o \
@@ -53,7 +54,7 @@ OBJS += $(addprefix $(BUILD)/$(TARGET)/, \
 CFLAGS += -mthumb
 LDFLAGS += -mthumb
 CFLAGS += -DBLVERSIONMJ=$(BLVERSION_MAJOR) -DBLVERSIONMN=$(BLVERSION_MINOR)
-CFLAGS += -DMENU_LOGO_ENABLE
+#CFLAGS += -DMENU_LOGO_ENABLE
 #CFLAGS += -DDEBUG
 
 MODULEDIRS := $(wildcard modules/*)
