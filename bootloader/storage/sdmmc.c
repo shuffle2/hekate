@@ -1228,6 +1228,7 @@ static int gc_vendor_xfer(sdmmc_storage_t *storage, gc_cmd_t *cmd, u8 *buf, u32 
 	}
 	uart_send_str(UART_A, rv?"C":"D");
 	rv = gc_vendor_cmd(storage, 61);
+	uart_send_str(UART_A, rv?"E":"F");
 	return rv;
 }
 
@@ -1235,7 +1236,12 @@ static int gc_upload_fw(sdmmc_storage_t *storage) {
 	gc_cmd_t cmd;
 	gc_cmd_init(&cmd, 1);
 	extern u8 gc_reader_fw[0x7800];
-	return gc_vendor_xfer(storage, &cmd, gc_reader_fw, sizeof(gc_reader_fw));
+	u8 *tmp = malloc(0x8000);
+	tmp += 0xff;
+	tmp = (u8 *)((u32)tmp & ~0xff);
+	memcpy(tmp, gc_reader_fw, sizeof(gc_reader_fw));
+	memset(&tmp[0x100], 0x55, 0x100);
+	return gc_vendor_xfer(storage, &cmd, tmp, sizeof(gc_reader_fw));
 }
 
 void gc_test() {
