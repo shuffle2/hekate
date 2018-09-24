@@ -1152,18 +1152,14 @@ int sdmmc_storage_init_gc(sdmmc_storage_t *storage, sdmmc_t *sdmmc)
 	memset(storage, 0, sizeof(sdmmc_storage_t));
 	storage->sdmmc = sdmmc;
 
-	if (!sdmmc_init(sdmmc, SDMMC_2, SDMMC_POWER_1_8, SDMMC_BUS_WIDTH_8, 14, 0)) {
-		uart_send_str(UART_A, "1");
+	if (!sdmmc_init(sdmmc, SDMMC_2, SDMMC_POWER_1_8, SDMMC_BUS_WIDTH_8, 14, 0))
 		return 0;
-	}
 	DPRINTF("[gc] after init\n");
 
 	usleep(1000 + (10000 + sdmmc->divisor - 1) / sdmmc->divisor);
 
-	if (!sdmmc_config_tuning(storage->sdmmc, 14, MMC_SEND_TUNING_BLOCK_HS200)) {
-		uart_send_str(UART_A, "2");
+	if (!sdmmc_config_tuning(storage->sdmmc, 14, MMC_SEND_TUNING_BLOCK_HS200))
 		return 0;
-	}
 	DPRINTF("[gc] after tuning\n");
 
 	sdmmc_sd_clock_ctrl(sdmmc, 1);
@@ -1219,16 +1215,20 @@ static int gc_vendor_write(sdmmc_storage_t *storage, u8 *buf, u32 len) {
 static int gc_vendor_xfer(sdmmc_storage_t *storage, gc_cmd_t *cmd, u8 *buf, u32 len) {
 	int rv;
 	u32 resp;
+	char msg[3] = {};
 	rv = gc_vendor_cmd60(storage, cmd->data, sizeof(cmd->data));
-	uart_send_str(UART_A, rv?"A":"B");
+	msg[0] = 'A'; msg[1] = '0' + rv;
+	uart_send_str(UART_A, msg);
 	if (rv) {
 		rv = gc_vendor_write(storage, buf, len);
 	} else {
 		rv = sdmmc_stop_transmission(storage->sdmmc, &resp);
 	}
-	uart_send_str(UART_A, rv?"C":"D");
+	msg[0] = 'B'; msg[1] = '0' + rv;
+	uart_send_str(UART_A, msg);
 	rv = gc_vendor_cmd(storage, 61);
-	uart_send_str(UART_A, rv?"E":"F");
+	msg[0] = 'C'; msg[1] = '0' + rv;
+	uart_send_str(UART_A, msg);
 	return rv;
 }
 
@@ -1240,7 +1240,7 @@ static int gc_upload_fw(sdmmc_storage_t *storage) {
 	tmp += 0xff;
 	tmp = (u8 *)((u32)tmp & ~0xff);
 	memcpy(tmp, gc_reader_fw, sizeof(gc_reader_fw));
-	memset(&tmp[0x100], 0x55, 0x100);
+	//memset(&tmp[0x100], 0x55, 0x100);
 	return gc_vendor_xfer(storage, &cmd, tmp, sizeof(gc_reader_fw));
 }
 
